@@ -1,7 +1,7 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const dotenv = require("dotenv");
-const { PrismaClient } = require("../generated/prisma");
+const { PrismaClient, Role } = require("../generated/prisma");
 const prisma = new PrismaClient();
 
 dotenv.config();
@@ -103,25 +103,26 @@ const registerUser = async (req, res) => {
             }
         });
 
-        if (existingUsername) throw new ValidationError("Username already taken!");
-        if (existingEmail) throw new ValidationError("Email already taken");
+        if (existingUsername) return res.status(409).json({ error : "Username already taken!" });
+        if (existingEmail) return res.status(409).json({ error : "Email already taken" });
 
         const user = await prisma.user.create({
             data: {
                 name: name,
                 username: username,
                 email: email,
-                password: hashedPass
+                password: hashedPass,
             }
         });
 
         return res.status(201).json({ msg : "User registered successfully! "});
     } catch (err) {
-        if (err instanceof ValidationError) return res.status(409).json({ err : err });
-
-        return res.status(500).json({ err : "Server side error!" });
+        console.error(err);
+        return res.status(500).json({ error : "Server side error!" });
     }
 };
+
+
 
 
 
