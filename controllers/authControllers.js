@@ -21,13 +21,13 @@ const verifyToken = async (req, res, next) => {
 
     // If there is no token then return error
     if (!token) {
-        return res.status(401).json({ "error" : "Access denied. Token missing!" });
+        return res.status(401).json({ "error": "Access denied. Token missing!" });
     }
 
     // Decode JWT Token
     try {
         const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-        
+
         // Get the user from the database
         const user = await prisma.user.findUnique({
             where: { id: decoded.userId },
@@ -103,8 +103,8 @@ const registerUser = async (req, res) => {
             }
         });
 
-        if (existingUsername) return res.status(409).json({ error : "Username already taken!" });
-        if (existingEmail) return res.status(409).json({ error : "Email already taken" });
+        if (existingUsername) return res.status(409).json({ error: "Username already taken!" });
+        if (existingEmail) return res.status(409).json({ error: "Email already taken" });
 
         const user = await prisma.user.create({
             data: {
@@ -115,20 +115,91 @@ const registerUser = async (req, res) => {
             }
         });
 
-        return res.status(201).json({ msg : "User registered successfully! "});
+        return res.status(201).json({ msg: "User registered successfully! " });
     } catch (err) {
         console.error(err);
-        return res.status(500).json({ error : "Server side error!" });
+        return res.status(500).json({ error: "Server side error!" });
     }
 };
 
+// Login a user
+const loginUser = async (req, res, next) => {
+    // Get username and password
+    const { username, pass } = req.body;
 
+    // Find the user
+    try {
+        const user = prisma.user.findUnique({
+            where: { username: username }
+        });
 
+        // No user with that username
+        if (!user) return res.status(401).json({ error: "Username not found!" });
 
+        // Compare provided password with the stored hashed password
+        const passMatch = bcrypt.compare(pass, user.password);
+
+        // Check password, if wrong pass then throw error
+        if (!passMatch) return res.status(403).json({ error: "Invalid password" });
+
+        // Generate access & refresh tokens
+        const accessToken = generateAccessToken();
+        const refreshToken = generateRefreshToken();
+
+        // Store the refresh token in DB
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { refreshToken: refreshToken }
+        });
+
+        // Send refresh token via HTTP-only cookie
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'Strict',
+            maxAge: process.env.JWT_REFRESH_EXPIRY * 24 * 60 * 60 * 1000
+        });
+
+        // Send the access token
+        res.status(201).json({ accessToken });
+
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: "Server side error!" });
+    }
+}
+
+// Logout a user
+const logoutUser = async (req, res, next) => {
+    // Get the refresh token
+    const refreshToken = req.cookie.refreshToken;
+
+    // If there is a token then clear that token from the DB
+    try {
+        if (refreshToken) {
+            // Get payload
+            const payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+
+            // Update DB
+            await prisma.user.update({
+                where: { id: payload.userId },
+                data: { refreshToken: null }
+            });
+
+            // Clear the token
+            res.clearCookie("refreshToken");
+            res.status(201).json({ msg: "Logout successful!" });
+        }
+    } catch (err) {
+        console.error(err);
+        return res.status(401).json({ err: "Refresh token invalid/already expired!" });
+    }
+};
 
 // Exports
 module.exports = {
     verifyToken,
     requireAuthor,
-    registerUser
+    registerUser,
+    loginUser
 }
