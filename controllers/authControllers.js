@@ -129,7 +129,7 @@ const loginUser = async (req, res, next) => {
 
     // Find the user
     try {
-        const user = prisma.user.findUnique({
+        const user = await prisma.user.findUnique({
             where: { username: username }
         });
 
@@ -143,8 +143,8 @@ const loginUser = async (req, res, next) => {
         if (!passMatch) return res.status(403).json({ error: "Invalid password" });
 
         // Generate access & refresh tokens
-        const accessToken = generateAccessToken();
-        const refreshToken = generateRefreshToken();
+        const accessToken = generateAccessToken(user);
+        const refreshToken = generateRefreshToken(user);
 
         // Store the refresh token in DB
         await prisma.user.update({
@@ -157,7 +157,7 @@ const loginUser = async (req, res, next) => {
             httpOnly: true,
             secure: true,
             sameSite: 'Strict',
-            maxAge: process.env.JWT_REFRESH_EXPIRY * 24 * 60 * 60 * 1000
+            maxAge: (7 * 24 * 60 * 60 * 1000)
         });
 
         // Send the access token
@@ -170,9 +170,9 @@ const loginUser = async (req, res, next) => {
 }
 
 // Logout a user
-const logoutUser = async (req, res, next) => {
+const logoutUser = async (req, res) => {
     // Get the refresh token
-    const refreshToken = req.cookie.refreshToken;
+    const refreshToken = req.cookies.refreshToken;
 
     // If there is a token then clear that token from the DB
     try {
@@ -196,10 +196,144 @@ const logoutUser = async (req, res, next) => {
     }
 };
 
+const refreshAccessToken = async (req, res) => {
+    // Get refresh token
+    const refreshToken = req.cookies.refreshToken;
+    if (!refreshToken) return res.status(401).json({ error : "No refresh token found!" });
+
+    try {
+        // Get user from refresh token
+        const payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        const user = await prisma.user.findUnique({ 
+            where : { id : payload.userId } 
+        });
+
+        // Get new access token
+        const accessToken = generateAccessToken(user);
+
+        res.status(201).json({ accessToken });
+    } catch (err) {
+        console.error(err);
+        if (err instanceof jwt.TokenExpiredError) return res.status(401).json({ error : "Expired token" });
+        if (err instanceof jwt.JsonWebTokenError) return res.status(401).json({ error : "Invalid token" });
+        return res.status(500).json({ error : "Server side error" });
+    }
+};
+
+// Delete user
+const deleteUser = async (req, res) => {
+    try {
+        // Delete the user
+        await prisma.user.delete({
+            where: { id : req.user.id }
+        });
+
+        res.status(200).json({ msg : "Successfully deleted the user!" });
+    } catch (err) {
+        return res.status(500).json({ error : "Server side error" });
+    }
+};
+
+// Update user
+const updateUser = async (req, res) => {
+    const { name, pass, profile } = req.body;
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id : req.user.id },
+            select: { 
+                profile: true
+            }
+        });
+
+        const updatedUser = await prisma.user.update({
+            where: { id : req.user.id },
+            data: {
+                ...(name && { name }),
+                ...(pass && { password : await bcrypt.hash(pass, 10) }),
+                ...(profile && {
+                    profile: {
+                        upsert: {
+                            create: {
+                                avatar: profile.avatar,
+                                interests: profile.interests,
+                            },
+                            update: {
+                                avatar: profile.avatar,
+                                interests: profile.interests,
+                            }
+                        }
+                    }
+                })
+            },
+            include: { profile : true }
+        });
+
+        console.log(updatedUser);
+
+        res.status(200).json({ msg : "Updated!!!" });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error : "Internal server error!" });
+    }
+};
+
+// Get all users (admin only operation)
+const getAllUsers = async (req, res) => {
+    try {
+        if (req.user.role !== Role.ADMIN) {
+            return res.status(403).json({ error : "Forbidden! Only admins can access this." });
+        } 
+
+        const users = await prisma.user.findMany({
+            omit: {
+                password: true,
+                refreshToken: true
+            }
+        });
+
+        res.status(200).json({ users });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error : "Server side error!" });
+    }
+};
+
+// Get individual user
+const getUserData = async (req, res) => {
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id : req.user.id },
+            include: {
+                profile: {
+                    omit: {
+                        id: true,
+                        userId: true
+                    }
+                },
+                authorProfile: true
+            },
+            omit: {
+                password: true,
+                refreshToken: true,
+            }
+        });
+        res.status(200).json({ user });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error : "Internal server error!" });
+    }
+};
+
 // Exports
 module.exports = {
     verifyToken,
     requireAuthor,
     registerUser,
-    loginUser
+    loginUser,
+    logoutUser,
+    refreshAccessToken,
+    getAllUsers, 
+    deleteUser,
+    updateUser,
+    getUserData
 }
