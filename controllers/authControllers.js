@@ -1,7 +1,7 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const dotenv = require("dotenv");
-const { PrismaClient } = require("@prisma/client");
+const { PrismaClient } = require("../generated/prisma");
 const prisma = new PrismaClient();
 
 dotenv.config();
@@ -70,7 +70,64 @@ const verifyToken = async (req, res, next) => {
 // Author excess check middleware
 const requireAuthor = (req, res, next) => {
     if (!req.user.authorId) {
-        return res.status(403).json({ message: 'Forbidden: Author access required' });
+        return res.status(403).json({ msg: 'Forbidden: Author access required' });
     }
     next();
 };
+
+// Register a user
+const registerUser = async (req, res) => {
+    // Get the body data
+    const { name, username, email, pass, cpass } = req.body;
+
+    // Check if user confirmed password correctly
+    if (pass !== cpass) {
+        return res.status(401).json({ error: "Password doesn't match" });
+    }
+
+    // Hash the password
+    const hashedPass = await bcrypt.hash(pass, 10);
+
+    // Try to register user 
+    try {
+        // Try finding if username or email is already taken or not
+        const existingUsername = await prisma.user.findFirst({
+            where: {
+                username: username
+            }
+        });
+
+        const existingEmail = await prisma.user.findFirst({
+            where: {
+                email: email
+            }
+        });
+
+        if (existingUsername) throw new ValidationError("Username already taken!");
+        if (existingEmail) throw new ValidationError("Email already taken");
+
+        const user = await prisma.user.create({
+            data: {
+                name: name,
+                username: username,
+                email: email,
+                password: hashedPass
+            }
+        });
+
+        return res.status(201).json({ msg : "User registered successfully! "});
+    } catch (err) {
+        if (err instanceof ValidationError) return res.status(409).json({ err : err });
+
+        return res.status(500).json({ err : "Server side error!" });
+    }
+};
+
+
+
+// Exports
+module.exports = {
+    verifyToken,
+    requireAuthor,
+    registerUser
+}

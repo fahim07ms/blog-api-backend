@@ -2,26 +2,26 @@ const express = require('express');
 const router = express.Router();
 
 // Import authentication related controllers
-const { verifyToken, registerUser, loginUser, logoutUser, updateUser, deleteUser, refreshToken } = require("../controllers/authControllers.js")
+const { verifyToken, registerUser } = require("../controllers/authControllers.js")
 
 
 // User Register
-router.post("/register", );
+router.post("/register", registerUser);
 
-// User login
-router.post("/login", );
+// // User login
+// router.post("/login", loginUser);
 
-// User logout
-router.post("/logout", );
+// // User logout
+// router.post("/logout", verifyToken, logoutUser);
 
-// User update
-router.put("/update", );
+// // User update
+// router.put("/update", verifyToken, logoutUser);
 
-// User Deletion
-router.delete("/delete",);
+// // User Deletion
+// router.delete("/delete", verifyToken, deleteUser);
 
-// Refresh Token
-router.refreshToken("/refresh-token", )
+// // Refresh Token
+// router.refreshToken("/refresh-token", verifyToken, refreshToken)
 
 
 
