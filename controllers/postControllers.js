@@ -3,6 +3,9 @@ const bcrypt = require("bcryptjs");
 const dotenv = require("dotenv");
 const { PrismaClient, Role, Prisma } = require("../generated/prisma");
 const { updateUser } = require("./authControllers");
+const {
+    PrismaClientKnownRequestError,
+} = require("../generated/prisma/runtime/library");
 const prisma = new PrismaClient();
 
 dotenv.config();
@@ -12,15 +15,13 @@ const getAllPosts = async (req, res) => {
     try {
         // Get all posts
         const posts = await prisma.post.findMany({
-            orderBy: {
-
-            }
+            orderBy: {},
         });
 
         res.status(200).json({ posts });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error : "Internal server error" });
+        res.status(500).json({ error: "Internal server error" });
     }
 };
 
@@ -29,17 +30,17 @@ const getAllPublishedPosts = async (req, res) => {
     try {
         const publishedPosts = await prisma.post.findMany({
             where: {
-                published: true
+                published: true,
             },
             orderBy: {
-                createdAt: 'desc'
-            }
+                createdAt: "desc",
+            },
         });
 
         res.status(200).json({ publishedPosts });
     } catch (err) {
         console.error(err);
-        return res.status(500).json({ error : "Internal server error!" });
+        return res.status(500).json({ error: "Internal server error!" });
     }
 };
 
@@ -48,17 +49,17 @@ const getAllPostsOfAuthor = async (req, res) => {
     try {
         const authorPosts = await prisma.post.findMany({
             where: {
-                authorId: req.user.authorId
+                authorId: req.user.authorId,
             },
             orderBy: {
-                createdAt: 'desc'
-            }
+                createdAt: "desc",
+            },
         });
 
         res.status(200).json({ authorPosts });
     } catch (err) {
         console.error(err);
-        return res.status(500).json({ error : "Internal server error!" });
+        return res.status(500).json({ error: "Internal server error!" });
     }
 };
 
@@ -68,8 +69,8 @@ const createPost = async (req, res) => {
     const { title, content } = req.body;
 
     // Check if the title or content is empty or not
-    if (!title) return res.status(403).json({ err : "Title is required!" });
-    if (!content) return res.status(403).json({ err : "Empty post content!!!" });
+    if (!title) return res.status(403).json({ err: "Title is required!" });
+    if (!content) return res.status(403).json({ err: "Empty post content!!!" });
 
     console.log(req.user);
     // Try to create the post
@@ -79,16 +80,16 @@ const createPost = async (req, res) => {
             data: {
                 title: title,
                 content: content,
-                authorId: req.user.authorId
-            }
+                authorId: req.user.authorId,
+            },
         });
 
         console.log(post);
 
-        res.status(201).json({ msg : "Post creation successful!" });
+        res.status(201).json({ msg: "Post creation successful!" });
     } catch (err) {
         console.error(err);
-        return res.status(500).json({ error : "Internal server error" });
+        return res.status(500).json({ error: "Internal server error" });
     }
 };
 
@@ -102,19 +103,22 @@ const editPost = async (req, res) => {
             data: {
                 ...(title && { title }),
                 ...(content && { content }),
-                ...(published && { published })
+                ...(published && { published }),
             },
-            where: { id : req.params.id }
+            where: { id: req.params.id },
         });
 
         res.status(201).json({ updatedPost });
     } catch (err) {
         console.error(err);
         if (err instanceof Prisma.PrismaClientKnownRequestError) {
-            if (err.code === 'P2025') return res.status(404).json({ error : "Post with given id not found!" });
+            if (err.code === "P2025")
+                return res
+                    .status(404)
+                    .json({ error: "Post with given id not found!" });
         }
 
-        return res.status(500).json({ error : "Internal server error" });
+        return res.status(500).json({ error: "Internal server error" });
     }
 };
 
@@ -122,21 +126,101 @@ const editPost = async (req, res) => {
 const deletePost = async (req, res) => {
     try {
         await prisma.post.delete({
-            where: { id : req.params.id }
+            where: { id: req.params.id },
         });
 
-        res.status(200).json({ msg : "Post deleted successfully!" });
+        res.status(200).json({ msg: "Post deleted successfully!" });
     } catch {
         console.error(err);
 
         // If no post with the given id
         if (err instanceof Prisma.PrismaClientKnownRequestError) {
-            if (err.code === 'P2025') return res.status(404).json({ error : "Post with given id not found!" });
+            if (err.code === "P2025")
+                return res
+                    .status(404)
+                    .json({ error: "Post with given id not found!" });
         }
 
-        return res.status(500).json({ error : "Internal server error!" });
+        return res.status(500).json({ error: "Internal server error!" });
     }
-}; 
+};
+
+// Controller for getting all comments of a post
+const getPostComments = async (req, res) => {
+    try {
+        const comments = await prisma.comment.findMany({
+            where: {
+                post: {
+                    id: req.params.id,
+                    published: true,
+                },
+            },
+        });
+
+        res.status(200).json({ comments });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: "Internal server error!" });
+    }
+};
+
+// Controller for creating comments
+const createComment = async (req, res) => {
+    // Get submitted data
+    const { content } = req.body;
+    if (!content) {
+        return res.status(404).json({ error: "Comment is empty!" });
+    }
+
+    // Try creating the comment
+    try {
+        const comment = await prisma.comment.create({
+            data: {
+                content,
+                post: {
+                    connect: { id: req.params.id },
+                },
+                user: {
+                    connect: { id: req.user.id },
+                },
+            },
+        });
+
+        res.status(201).json({ comment });
+    } catch (err) {
+        console.error(err);
+        if (err instanceof Prisma.PrismaClientKnownRequestError) {
+            if (err.code === "P2025")
+                return res.status(404).json({ error: "No such post found!" });
+        }
+        return res.status(500).json({ error: "Internal server error!" });
+    }
+};
+
+// Controller for deleting a Comment
+const deleteComment = async (req, res) => {
+    try {
+        await prisma.comment.delete({
+            where: {
+                id: req.params.commentId,
+                user: {
+                    id: req.user.id,
+                },
+            },
+        });
+
+        res.status(200).json({ msg: "Comment successfully deleted!" });
+    } catch (err) {
+        console.error(err);
+        if (err instanceof Prisma.PrismaClientKnownRequestError) {
+            if (err.code === "P2025")
+                return res
+                    .status(404)
+                    .json({ error: "No such comment found!" });
+        }
+        return res.status(500).json({ error: "Internal server error!" });
+    }
+};
 
 module.exports = {
     getAllPosts,
@@ -144,5 +228,8 @@ module.exports = {
     getAllPostsOfAuthor,
     createPost,
     editPost,
-    deletePost
-}
+    deletePost,
+    getPostComments,
+    createComment,
+    deleteComment,
+};

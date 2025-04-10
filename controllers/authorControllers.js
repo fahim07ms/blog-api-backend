@@ -67,6 +67,7 @@ const createAuthorProfile = async (req, res) => {
 };
 
 
+
 module.exports = {
     getAuthorProfile,
     createAuthorProfile
