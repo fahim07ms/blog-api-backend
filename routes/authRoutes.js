@@ -2,8 +2,8 @@ const express = require('express');
 const router = express.Router();
 
 // Import authentication related controllers
-const { verifyToken, registerUser, loginUser, logoutUser, refreshAccessToken, getAllUsers, deleteUser, updateUser, getUserData } = require("../controllers/authControllers.js")
-
+const { registerUser, loginUser, logoutUser, refreshAccessToken, getAllUsers, deleteUser, updateUser, getUserData } = require("../controllers/authControllers.js");
+const { verifyToken } = require('../middlewares/authMiddlewares.js');
 
 // User Register
 router.post("/register", registerUser);
