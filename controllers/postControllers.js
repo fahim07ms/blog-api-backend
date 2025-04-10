@@ -1,7 +1,8 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const dotenv = require("dotenv");
-const { PrismaClient, Role } = require("../generated/prisma");
+const { PrismaClient, Role, Prisma } = require("../generated/prisma");
+const { updateUser } = require("./authControllers");
 const prisma = new PrismaClient();
 
 dotenv.config();
@@ -91,9 +92,57 @@ const createPost = async (req, res) => {
     }
 };
 
+// Edit a post
+const editPost = async (req, res) => {
+    // Get submitted data
+    const { title, content, published } = req.body;
+    try {
+        // Try to edit
+        const updatedPost = await prisma.post.update({
+            data: {
+                ...(title && { title }),
+                ...(content && { content }),
+                ...(published && { published })
+            },
+            where: { id : req.params.id }
+        });
+
+        res.status(201).json({ updatedPost });
+    } catch (err) {
+        console.error(err);
+        if (err instanceof Prisma.PrismaClientKnownRequestError) {
+            if (err.code === 'P2025') return res.status(404).json({ error : "Post with given id not found!" });
+        }
+
+        return res.status(500).json({ error : "Internal server error" });
+    }
+};
+
+// Delete a post
+const deletePost = async (req, res) => {
+    try {
+        await prisma.post.delete({
+            where: { id : req.params.id }
+        });
+
+        res.status(200).json({ msg : "Post deleted successfully!" });
+    } catch {
+        console.error(err);
+
+        // If no post with the given id
+        if (err instanceof Prisma.PrismaClientKnownRequestError) {
+            if (err.code === 'P2025') return res.status(404).json({ error : "Post with given id not found!" });
+        }
+
+        return res.status(500).json({ error : "Internal server error!" });
+    }
+}; 
+
 module.exports = {
     getAllPosts,
     getAllPublishedPosts,
     getAllPostsOfAuthor,
-    createPost
+    createPost,
+    editPost,
+    deletePost
 }
