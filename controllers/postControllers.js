@@ -2,10 +2,6 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const dotenv = require("dotenv");
 const { PrismaClient, Role, Prisma } = require("../generated/prisma");
-const { updateUser } = require("./authControllers");
-const {
-    PrismaClientKnownRequestError,
-} = require("../generated/prisma/runtime/library");
 const prisma = new PrismaClient();
 
 dotenv.config();
@@ -199,6 +195,7 @@ const createComment = async (req, res) => {
 
 // Controller for deleting a Comment
 const deleteComment = async (req, res) => {
+    // Try deleting the comment with comment id & check the user is correct
     try {
         await prisma.comment.delete({
             where: {
@@ -212,6 +209,8 @@ const deleteComment = async (req, res) => {
         res.status(200).json({ msg: "Comment successfully deleted!" });
     } catch (err) {
         console.error(err);
+
+        // If no comment is found with the given id
         if (err instanceof Prisma.PrismaClientKnownRequestError) {
             if (err.code === "P2025")
                 return res

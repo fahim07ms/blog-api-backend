@@ -13,6 +13,7 @@ app.use(express.json());
 const { authRoutes } = require("./routes/authRoutes");
 const { postRoutes } = require("./routes/postRoutes");
 const { authorRoutes } = require("./routes/authorRoutes");
+const { tagRoutes } = require("./routes/tagRoutes");
 
 // Dotenv
 dotenv.config();
@@ -20,14 +21,13 @@ dotenv.config();
 // Port
 const port = process.env.PORT || 3000;
 
-
 // Base Routes
 app.use("/api/users", authRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/authors", authorRoutes);
-
+app.use("/api/tags", tagRoutes);
 
 // Port listening
 app.listen(port, () => {
     console.log(`Server listening on port: ${port}`);
-})
+});
